@@ -10,6 +10,50 @@
       {{ triggerTableData.errorMessage }}
     </v-alert>
 
+    <div
+      v-if="tables.length"
+      class="popup-filters"
+    >
+      <v-select
+        v-model="filters.minSeverity"
+        :items="severitySelector"
+        :label="$i18n('minSev')"
+        item-title="name"
+        item-value="priority"
+        density="compact"
+        variant="outlined"
+        hide-details
+        class="min-severity-select"
+        @update:model-value="saveFilters"
+      />
+      <v-switch
+        v-model="filters.hideAcknowledged"
+        :label="$i18n('hideEvents')"
+        color="primary"
+        density="compact"
+        hide-details
+        @update:model-value="saveFilters"
+      />
+      <v-switch
+        v-model="filters.hideMaintenance"
+        :label="$i18n('ignoreHosts')"
+        color="primary"
+        density="compact"
+        hide-details
+        @update:model-value="saveFilters"
+      />
+      <v-spacer />
+      <v-btn
+        v-if="!isTabView"
+        :icon="mdiOpenInNew"
+        :title="$i18n('openInTab')"
+        size="small"
+        variant="text"
+        density="comfortable"
+        @click="openInTab"
+      />
+    </div>
+
     <v-card
       v-for="table in tables"
       id="triggerTable"
@@ -68,7 +112,7 @@
         v-if="!(table.errors.length && !table.triggers.length)"
         v-model:sort-by="table.sortBy"
         v-model:expanded="table.expanded"
-        :items="table.triggers"
+        :items="visibleTriggers(table.triggers)"
         item-value="rowKey"
         :headers="table.headers"
         :loading="triggerTableData.loading"
@@ -193,9 +237,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { browser } from '../lib/browser-shim.js'; // Chrome: aliases globalThis.chrome (no-op in Firefox)
-import { mdiMagnify, mdiFlagVariant, mdiWrench, mdiEyeOff } from '@mdi/js';
+import { mdiMagnify, mdiFlagVariant, mdiWrench, mdiEyeOff, mdiOpenInNew } from '@mdi/js';
 import { versionPart, ackEventUrl } from '../lib/zabbix-urls.js';
 
 // Zabbix severity levels - replaces magic numbers 0-5
@@ -216,6 +260,18 @@ const triggerTableData = ref({
 });
 // Tables rendered in the popup: one per server, or a single combined one
 const tables = ref([]);
+// Same page opened in a regular tab (no 800x600 popup limit)
+const isTabView = new URLSearchParams(window.location.search).get("view") === "tab";
+// Global filter toggles, persisted by the background (settings.global)
+const filters = ref({
+  minSeverity: 0,
+  hideAcknowledged: false,
+  hideMaintenance: false,
+});
+
+const severitySelector = Object.values(SEVERITY)
+  .filter((priority) => priority >= SEVERITY.NOT_CLASSIFIED)
+  .map((priority) => ({ name: priority_name_filter(priority), priority }));
 
 // Data fetching
 async function getPopupData() {
@@ -242,10 +298,65 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 // versionPart imported from ../lib/zabbix-urls.js (unit-tested there)
 
-onMounted(async () => {
+async function loadPopupData() {
   triggerTableData.value = await getPopupData();
-  tables.value = buildTables(triggerTableData.value);
+  // Keep per-table UI state (filter text, expanded row) across refreshes
+  const previous = Object.fromEntries(tables.value.map((t) => [t.key, t]));
+  tables.value = buildTables(triggerTableData.value).map((t) => (
+    previous[t.key]
+      ? { ...t, search: previous[t.key].search, expanded: previous[t.key].expanded }
+      : t
+  ));
+  filters.value = {
+    minSeverity: Number(triggerTableData.value.minSeverity || 0),
+    hideAcknowledged: triggerTableData.value.hideAcknowledged === true,
+    hideMaintenance: triggerTableData.value.hideMaintenance === true,
+  };
+}
+
+function onStorageChanged(changes, area) {
+  // Background rewrites popupTable on every poll; refresh so an open tab
+  // doesn't go stale
+  if (area === "session" && "popupTable" in changes) {
+    loadPopupData();
+  }
+}
+
+onMounted(async () => {
+  if (isTabView) {
+    document.title = browser.i18n.getMessage("appName");
+  }
+  await loadPopupData();
+  browser.storage.onChanged.addListener(onStorageChanged);
 });
+
+onUnmounted(() => {
+  browser.storage.onChanged.removeListener(onStorageChanged);
+});
+
+function openInTab() {
+  browser.tabs.create({ url: browser.runtime.getURL("popup/popup.html?view=tab") });
+  window.close();
+}
+
+function visibleTriggers(triggers) {
+  // Same rules as isTriggerHidden in background.js, on the popup row shape
+  return triggers.filter((t) =>
+    Number(t.priority) >= filters.value.minSeverity &&
+    !(filters.value.hideAcknowledged && t.acknowledged) &&
+    !(filters.value.hideMaintenance && t.maintenance_status)
+  );
+}
+
+function saveFilters() {
+  // Persist and let the background recompute badge/icon right away
+  browser.runtime.sendMessage({
+    method: "setFilters",
+    minSeverity: filters.value.minSeverity,
+    hideAcknowledged: filters.value.hideAcknowledged,
+    hideMaintenance: filters.value.hideMaintenance,
+  });
+}
 
 function serverError(serverObj) {
   return {
@@ -569,6 +680,15 @@ td.expanded-cell {
     padding-left: 10px;
     padding-right: 10px;
     padding-bottom: 3px;
+}
+.popup-filters {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 10px 0;
+}
+.min-severity-select {
+    flex: 0 0 170px;
 }
 /* Server name opens the Zabbix dashboard in a new tab */
 .server-name-link {

@@ -1,4 +1,8 @@
 {
+  "openInTab": {
+    "message": "Otevřít v nové kartě",
+    "description": "Popup button tooltip"
+  },
   "combineServers": {
     "message": "Zobrazit všechny servery v jedné tabulce",
     "description": "Options screen label"

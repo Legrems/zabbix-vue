@@ -1,4 +1,8 @@
 {
+  "openInTab": {
+    "message": "새 탭에서 열기",
+    "description": "Popup button tooltip"
+  },
   "combineServers": {
     "message": "모든 서버를 하나의 표에 표시",
     "description": "Options screen label"

@@ -1,4 +1,8 @@
 {
+  "openInTab": {
+    "message": "Abrir en una pestaña nueva",
+    "description": "Popup button tooltip"
+  },
   "combineServers": {
     "message": "Mostrar todos los servidores en una sola tabla",
     "description": "Options screen label"
