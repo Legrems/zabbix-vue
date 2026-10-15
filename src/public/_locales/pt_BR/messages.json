@@ -1,4 +1,8 @@
 {
+  "combineServers": {
+    "message": "Mostrar todos os servidores em uma única tabela",
+    "description": "Options screen label"
+  },
   "appName": {
     "message": "Zabbix Vue",
     "description": "Monitor Zabbix problemas no seu browser"

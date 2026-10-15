@@ -11,9 +11,9 @@
     </v-alert>
 
     <v-card
-      v-for="(serverObj, serverIndex) in triggerTableData.servers"
+      v-for="table in tables"
       id="triggerTable"
-      v-bind:key="serverObj.server"
+      v-bind:key="table.key"
     >
       <v-container>
         <v-row
@@ -25,10 +25,11 @@
             cols="3"
           >
             <h2
+              v-if="!table.combined"
               class="server-name-link"
               :title="$i18n('openDashboard')"
-              @click="openDashboard(serverIndex)"
-            >{{ serverObj.server }}</h2>
+              @click="openDashboard(table.url)"
+            >{{ table.title }}</h2>
           </v-col>
           <v-col
             class="flex-grow-1 flex-shrink-0"
@@ -36,7 +37,7 @@
             style="min-width: 100px; max-width: 100%;"
           >
             <v-text-field
-              v-model="serverObj.search"
+              v-model="table.search"
               :label="$i18n('filter')"
               single-line
               density="compact"
@@ -51,24 +52,43 @@
           </v-col>
         </v-row>
       </v-container>
+      <v-alert
+        v-for="err in table.errors"
+        :key="err.server"
+        prominent
+        type="error"
+        density="compact"
+        class="ma-1"
+      >
+        <span v-if="table.combined">{{ err.server }}: </span>
+        {{ err.errorMessage }}
+        {{ err.errorDetails }}
+      </v-alert>
       <v-data-table
-        v-model:sort-by="serverObj.sortBy"
-        v-model:expanded="serverObj.expanded"
-        :items="serverObj.triggers"
-        item-value="triggerid"
-        :headers="triggerTableData.headers"
+        v-if="!(table.errors.length && !table.triggers.length)"
+        v-model:sort-by="table.sortBy"
+        v-model:expanded="table.expanded"
+        :items="table.triggers"
+        item-value="rowKey"
+        :headers="table.headers"
         :loading="triggerTableData.loading"
-        :search="serverObj.search"
+        :search="table.search"
         :single-expand="true"
         hide-default-footer
         class="elevation-1"
         density="compact"
         items-per-page="-1"
-        @click:row="clickRow"
-        @update:sortBy="sortSave($event, serverIndex)"
+        @update:sortBy="sortSave($event, table)"
       >
         <template v-slot:item="{ item }">
-          <tr :class="priority_class(item.priority)" @click="clickRow(item.triggerid, serverIndex)">
+          <tr :class="priority_class(item.priority)" @click="clickRow(item.rowKey, table)">
+            <td v-if="table.combined" class="text-no-wrap">
+              <span
+                class="server-name-link"
+                :title="$i18n('openDashboard')"
+                @click.stop="openDashboard(item.url)"
+              >{{ item.server }}</span>
+            </td>
             <td> {{ item.system }}</td>
             <td>
               <v-sheet class="d-flex mb-0" :class="priority_class(item.priority)">
@@ -94,9 +114,7 @@
                 size="small"
                 class="pa-0 px-1 ma-0"
                 color="teal-lighten-3"
-                @click="
-                  hostDetails(serverObj.url, serverObj.version, item.hostid)
-                "
+                @click="hostDetails(item.url, item.version, item.hostid)"
               >
                 {{ $i18n("hostDetails") }}
               </v-btn>
@@ -104,7 +122,7 @@
                 size="small"
                 class="pa-0 px-1 ma-0"
                 color="teal-lighten-3"
-                @click="latestData(serverObj.url, serverObj.version, item.hostid)"
+                @click="latestData(item.url, item.version, item.hostid)"
               >
                 {{ $i18n("latestData") }}
               </v-btn>
@@ -112,7 +130,7 @@
                 size="small"
                 class="pa-0 px-1 ma-0"
                 color="teal-lighten-3"
-                @click="hostGraphs(serverObj.url, serverObj.version, item.hostid)"
+                @click="hostGraphs(item.url, item.version, item.hostid)"
               >
                 {{ $i18n("hostGraphs") }}
               </v-btn>
@@ -120,9 +138,7 @@
                 size="small"
                 class="pa-0 px-1 ma-0"
                 color="teal-lighten-3"
-                @click="
-                  hostDashboards(serverObj.url, serverObj.version, item.hostid)
-                "
+                @click="hostDashboards(item.url, item.version, item.hostid)"
               >
                 {{ $i18n("hostDashboards") }}
               </v-btn>
@@ -130,9 +146,7 @@
                 size="small"
                 class="pa-0 px-1 ma-0"
                 color="teal-lighten-3"
-                @click="
-                  problemDetails(serverObj.url, serverObj.version, item.triggerid)
-                "
+                @click="problemDetails(item.url, item.version, item.triggerid)"
               >
                 {{ $i18n("problemDetails") }}
               </v-btn>
@@ -140,14 +154,7 @@
                 size="small"
                 class="pa-0 px-1 ma-0"
                 color="teal-lighten-3"
-                @click="
-                  eventDetails(
-                    serverObj.url,
-                    serverObj.version,
-                    item.triggerid,
-                    item.eventid
-                  )
-                "
+                @click="eventDetails(item.url, item.version, item.triggerid, item.eventid)"
               >
                 {{ $i18n("eventDetails") }}
               </v-btn>
@@ -155,14 +162,7 @@
                 size="small"
                 class="pa-0 px-1 ma-0"
                 color="teal-lighten-3"
-                @click="
-                  ackEvent(
-                    serverObj.url,
-                    serverObj.version,
-                    item.triggerid,
-                    item.eventid
-                  )
-                "
+                @click="ackEvent(item.url, item.version, item.triggerid, item.eventid)"
               >
                 {{ $i18n("ackEvent") }}
               </v-btn>
@@ -171,29 +171,20 @@
           </tr>
         </template>
         <template v-slot:no-data>
-          <v-alert 
-            :value="true" 
+          <v-alert
+            :value="true"
             type="success"
-            color="green-lighten-1" 
-            v-if="serverObj.search.length === 0 && !serverObj.error"
+            color="green-lighten-1"
+            v-if="!table.search && !table.errors.length"
           >
             {{ $i18n("noProb") }}
           </v-alert>
           <v-alert
-            :value="true" 
+            :value="true"
             type="info"
-            v-if="serverObj.search.length > 0 && !serverObj.error"
+            v-if="table.search"
           >
-            {{ $i18n("noResults") }}: {{ serverObj.search }}
-          </v-alert>
-          <v-alert
-            v-if="serverObj.error"
-            prominent
-            type="error"
-            density="compact"
-          >
-            {{ serverObj.errorMessage }}
-            {{ serverObj.errorDetails }}
+            {{ $i18n("noResults") }}: {{ table.search }}
           </v-alert>
         </template>
       </v-data-table>
@@ -223,6 +214,8 @@ const triggerTableData = ref({
   loading: true,
   error: false,
 });
+// Tables rendered in the popup: one per server, or a single combined one
+const tables = ref([]);
 
 // Data fetching
 async function getPopupData() {
@@ -251,7 +244,65 @@ document.addEventListener("DOMContentLoaded", async function () {
 
 onMounted(async () => {
   triggerTableData.value = await getPopupData();
+  tables.value = buildTables(triggerTableData.value);
 });
+
+function serverError(serverObj) {
+  return {
+    server: serverObj.server,
+    errorMessage: serverObj.errorMessage,
+    errorDetails: serverObj.errorDetails,
+  };
+}
+
+function buildTables(data) {
+  /*
+   * Flatten the per-server popup data into the tables to render.
+   * Each row carries its server's alias/url/version so actions work the
+   * same way whether the table is per-server or combined.
+   */
+  const servers = data.servers || [];
+  const perServer = servers.map((serverObj, serverIndex) => ({
+    key: serverObj.server,
+    title: serverObj.server,
+    combined: false,
+    serverIndex: serverIndex,
+    url: serverObj.url,
+    headers: data.headers,
+    sortBy: serverObj.sortBy || [],
+    search: "",
+    expanded: [],
+    errors: serverObj.error ? [serverError(serverObj)] : [],
+    triggers: (serverObj.triggers || []).map((t) => ({
+      ...t,
+      rowKey: serverIndex + ":" + t.triggerid,
+      server: serverObj.server,
+      url: serverObj.url,
+      version: serverObj.version,
+    })),
+  }));
+
+  if (!data.combined || perServer.length === 0) {
+    return perServer;
+  }
+
+  return [{
+    key: "__combined__",
+    title: "",
+    combined: true,
+    serverIndex: -1,
+    url: null,
+    headers: [
+      { title: browser.i18n.getMessage("server"), sortable: true, value: "server" },
+      ...data.headers,
+    ],
+    sortBy: data.combinedSortBy || [],
+    search: "",
+    expanded: [],
+    errors: perServer.flatMap((t) => t.errors),
+    triggers: perServer.flatMap((t) => t.triggers),
+  }];
+}
 
 // Methods (exposed to template automatically via <script setup>)
 function priority_class(value) {
@@ -307,20 +358,23 @@ function date_filter(value) {
   return result;
 }
 
-function sortSave(value, serverIndex) {
+function sortSave(value, table) {
+  if (!value.length) {
+    return;
+  }
   browser.runtime.sendMessage({
     method: "submitPagination",
-    index: serverIndex,
+    index: table.serverIndex,
     sortBy: value[0].key,
     descending: value[0].order,
   });
 }
 
-function clickRow(item, serverIndex) {
-  if (triggerTableData.value.servers[serverIndex].expanded[0] === item) {
-    triggerTableData.value.servers[serverIndex].expanded = [];
+function clickRow(rowKey, table) {
+  if (table.expanded[0] === rowKey) {
+    table.expanded = [];
   } else {
-    triggerTableData.value.servers[serverIndex].expanded = [item];
+    table.expanded = [rowKey];
   }
 }
 
@@ -328,8 +382,7 @@ function hostDetails(url, version, hostid) {
   window.open(url + "/hostinventories.php?hostid=" + hostid, "_blank");
 }
 
-function openDashboard(serverIndex) {
-  const url = triggerTableData.value.servers[serverIndex].url;
+function openDashboard(url) {
   if (url) {
     window.open(url, "_blank");
   }

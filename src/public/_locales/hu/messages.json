@@ -1,4 +1,8 @@
 {
+  "combineServers": {
+    "message": "Az összes szerver megjelenítése egy táblázatban",
+    "description": "Options screen label"
+  },
   "appName": {
     "message": "Zabbix Vue",
     "description": "Extension name"

@@ -1,4 +1,8 @@
 {
+  "combineServers": {
+    "message": "Mostra tutti i server in un'unica tabella",
+    "description": "Options screen label"
+  },
   "appName": {
     "message": "Zabbix Vue",
     "description": "Extension name"

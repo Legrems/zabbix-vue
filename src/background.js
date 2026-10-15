@@ -729,6 +729,9 @@ async function setActiveTriggersTable(triggerResults) {
     "servers": [],
     "headers": popupHeaders,
     "loaded": false,
+    // Show every server's triggers in a single table (with a server column)
+    "combined": settings.global.combineServers === true,
+    "combinedSortBy": settings.global.combinedSortBy || [{ key: "priority", order: "desc" }],
   };
   let servers = Object.keys(triggerResults);
   for (var i = 0; i < servers.length; i++) {
@@ -818,7 +821,12 @@ async function handleMessage(request, sender, sendResponse) {
         "key": request.sortBy,
         "order": request.descending
       }]
-      settings.servers[request.index]["sortBy"] = newSort;
+      if (request.index === -1) {
+        // Combined (all servers) table keeps its own sort order
+        settings.global["combinedSortBy"] = newSort;
+      } else {
+        settings.servers[request.index]["sortBy"] = newSort;
+      }
 
       await browser.storage.local.set({"ZabbixServers": JSON.stringify(settings)});
       await setActiveTriggersTable();

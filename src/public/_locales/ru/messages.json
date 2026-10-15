@@ -99,6 +99,10 @@
     "message": "Показывать всплывающие уведомления",
     "description": "Options screen label"
   },
+  "combineServers": {
+    "message": "Показывать все серверы в одной таблице",
+    "description": "Options screen label"
+  },
   "selectName": {
     "message": "Показывать во всплывающие уведомлении имя",
     "description": "Options screen label"

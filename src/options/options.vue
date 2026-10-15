@@ -183,6 +183,11 @@
                 <v-radio :label="$i18n('displayHost')" value="host" />
                 <v-radio :label="$i18n('displayName')" value="name" />
               </v-radio-group>
+              <v-checkbox
+                v-model="zabbixs.global.combineServers"
+                class="mb-0 pa-0"
+                :label="$i18n('combineServers')"
+              />
             </v-card>
           </v-container>
         </v-container>
@@ -258,6 +263,7 @@ const zabbixs = ref({
   global: {
     interval: 60,
     displayName: "host",
+    combineServers: false,
     formValid: true,
   },
   servers: [

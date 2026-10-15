@@ -2010,6 +2010,32 @@ describe('background.js', () => {
       ]);
     });
 
+    it('saves the combined table sort order on the global settings', async () => {
+      const settings = makeSettings();
+      mockBrowser.storage.local.get.mockImplementation(async (key) => {
+        if (key === ZABBIX_SERVERS_KEY) {
+          return { [ZABBIX_SERVERS_KEY]: JSON.stringify(settings) };
+        }
+        if (key === 'triggerResults') {
+          return { triggerResults: {} };
+        }
+        return {};
+      });
+
+      await handleMessage(
+        { method: 'submitPagination', sortBy: 'server', descending: 'asc', index: -1 },
+        {},
+        vi.fn()
+      );
+
+      const settingsCall = mockBrowser.storage.local.set.mock.calls.find(
+        (c) => c[0].ZabbixServers !== undefined
+      );
+      const savedSettings = JSON.parse(settingsCall[0].ZabbixServers);
+      expect(savedSettings.global.combinedSortBy).toEqual([{ key: 'server', order: 'asc' }]);
+      expect(savedSettings.servers[0].sortBy).toEqual(settings.servers[0].sortBy);
+    });
+
     it('clears the poll alarm on reinitialize so an interval change takes effect', async () => {
       const settings = makeSettings({ global: { interval: 300 } });
       mockBrowser.storage.local.get.mockImplementation(async (key) => {
